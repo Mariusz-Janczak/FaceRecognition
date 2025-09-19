@@ -1,0 +1,7 @@
+deepface
+scipy
+tensorflow
+insightface
+onnxruntime
+typing-extensions
+dlib
