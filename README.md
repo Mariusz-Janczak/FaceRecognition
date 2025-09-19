@@ -27,4 +27,4 @@ python -m face_recognition.compare image1.jpg image2.jpg --model ArcFace --detec
 | --model | ArcFace | Face recognition model (VGG-Face, Facenet, Facenet512, OpenFace, DeepFace, DeepID, Dlib, ArcFace, SFace, GhostFaceNet, Buffalo_L) |
 | --detector | retinaface | Face detector (retinaface, mtcnn, opencv, dlib) |
 | --use-default-threshold | - | Use DeepFace default threshold instead of custom one |
-| --threshold | default=0.5 | Custom threshold (ignored if --use-default-threshold is set) |
+| --threshold | 0.5 | Custom threshold (ignored if --use-default-threshold is set) |
