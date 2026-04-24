@@ -123,7 +123,7 @@ def draw_id_with_background(draw, x, y, w, h, text, font, text_color="black",
     draw.text((draw_x, draw_y), text, fill=text_color, font=font)
 
 
-def extract_and_compare_faces(image1_path, image2_path, model_name="ArcFace", detector="retinaface", use_default_threshold=False, custom_threshold=0.5):
+def extract_and_compare_faces(image1_path, image2_path, model_name="ArcFace", detector="retinaface", threshold=None):
     if not os.path.isfile(image1_path) or not os.path.isfile(image2_path):
         print("Error: both image files are required.")
         return
@@ -136,7 +136,7 @@ def extract_and_compare_faces(image1_path, image2_path, model_name="ArcFace", de
     faces1 = detect_faces(np.array(img1), detector)
     faces2 = detect_faces(np.array(img2), detector)
 
-    print(f"Recognizing faces using '{model_name}'model...")
+    print(f"Recognizing faces using '{model_name}' model...")
     model: FacialRecognition = DeepFace.build_model(task="facial_recognition", model_name=model_name)
     target_size = model.input_shape
     print(f"Faces target size: {target_size}")
@@ -149,7 +149,8 @@ def extract_and_compare_faces(image1_path, image2_path, model_name="ArcFace", de
         metric = "euclidean"
 
     default_threshold = verification.find_threshold(model_name=model_name, distance_metric=metric)
-    threshold = default_threshold if use_default_threshold else custom_threshold
+    if threshold is None:
+        threshold = default_threshold
 
     print(f"Model metric: {metric}, Threshold: {threshold:.3f}")
 
@@ -170,7 +171,7 @@ def extract_and_compare_faces(image1_path, image2_path, model_name="ArcFace", de
         draw2.rectangle([x, y, x + w, y + h], outline="red", width=FACE_BORDER)
 
     for i, j, distance in matches_found:
-        color = "green" if distance < min(custom_threshold, default_threshold) else "yellow"
+        color = "green" if distance < min(threshold, default_threshold) else "yellow"
         x1, y1, w1, h1 = [int(faces1[i]["facial_area"][k] * scale1) for k in ("x", "y", "w", "h")]
         draw1.rectangle([x1, y1, x1 + w1, y1 + h1], outline=color, width=FACE_BORDER)
         text = f"ID {i}"
@@ -189,7 +190,7 @@ def extract_and_compare_faces(image1_path, image2_path, model_name="ArcFace", de
         print(f"Found {len(matches_found)} match(es):")
         reset = "\033[0m"
         for i, j, distance in matches_found:
-            color = "\033[92m" if distance < min(custom_threshold, default_threshold) else "\033[93m"
+            color = "\033[92m" if distance < min(threshold, default_threshold) else "\033[93m"
             print(f"{color}Face ID {i} of {image1_path} matches face ID {j} of {image2_path} (distance: {distance:.3f}){reset}")
     else:
         print("No matching faces found.")
@@ -201,9 +202,8 @@ if __name__ == "__main__":
     parser.add_argument("image2", help="Path to the 2nd image")
     parser.add_argument("--model", default="ArcFace", help="Face recognition model (VGG-Face, Facenet, Facenet512, OpenFace, DeepFace, DeepID, Dlib, ArcFace, SFace, GhostFaceNet, Buffalo_L)")
     parser.add_argument("--detector", default="retinaface", help="Face detector (retinaface, mtcnn, opencv, dlib)")
-    parser.add_argument("--use-default-threshold", action="store_true", help="Use DeepFace default threshold instead of custom one")
-    parser.add_argument("--threshold", type=float, default=0.5, help="Custom threshold (ignored if --use-default-threshold is set)")
+    parser.add_argument("--threshold", type=float, default=None, help="Custom threshold (ignored if --use-default-threshold is set)")
     args = parser.parse_args()
 
     extract_and_compare_faces(args.image1, args.image2, model_name=args.model, detector=args.detector,
-        use_default_threshold=args.use_default_threshold, custom_threshold=args.threshold)
+        threshold=args.threshold)
