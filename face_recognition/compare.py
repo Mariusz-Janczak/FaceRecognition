@@ -202,7 +202,7 @@ if __name__ == "__main__":
     parser.add_argument("image2", help="Path to the 2nd image")
     parser.add_argument("--model", default="ArcFace", help="Face recognition model (VGG-Face, Facenet, Facenet512, OpenFace, DeepFace, DeepID, Dlib, ArcFace, SFace, GhostFaceNet, Buffalo_L)")
     parser.add_argument("--detector", default="retinaface", help="Face detector (retinaface, mtcnn, opencv, dlib)")
-    parser.add_argument("--threshold", type=float, default=None, help="Custom threshold (ignored if --use-default-threshold is set)")
+    parser.add_argument("--threshold", type=float, default=None, help="Custom threshold. If not set it is used default for model.")
     args = parser.parse_args()
 
     extract_and_compare_faces(args.image1, args.image2, model_name=args.model, detector=args.detector,

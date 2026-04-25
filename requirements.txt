@@ -1,5 +1,6 @@
 deepface
 scipy
+tf-keras
 tensorflow
 insightface
 onnxruntime
