@@ -5,10 +5,11 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import argparse
 import numpy as np
 import cv2
+import tempfile
 from deepface import DeepFace
 from deepface.modules import verification
 from deepface.models.FacialRecognition import FacialRecognition
-from scipy.spatial.distance import cosine, cdist
+from scipy.spatial.distance import cdist
 from scipy.optimize import linear_sum_assignment
 from PIL import Image, ImageDraw, ImageFont
 
@@ -23,21 +24,70 @@ except IOError:
     TEXT_SIZE = ascent + descent
 
 
-def resize_with_aspect_ratio(image, max_size=1024):
+def resize_with_aspect_ratio(image, max_size: int = 1024):
+    """
+    Resize an image while maintaining its aspect ratio so that its largest dimension does not exceed max_size.
+
+    Parameters:
+        image (PIL.Image.Image): The input image to resize.
+        max_size (int): The maximum allowed size for the largest dimension (default: 1024).
+
+    Returns:
+        tuple: A tuple containing the resized PIL Image and the scaling factor used.
+    """
     scale = max_size / max(image.height, image.width)
     return image.resize(
         (int(image.width * scale), int(image.height * scale)),
         Image.Resampling.LANCZOS
     ), scale
 
-def detect_faces(image_array, detector_backend="retinaface"):
-    return DeepFace.extract_faces(
-        image_array,
-        detector_backend=detector_backend,
-        enforce_detection=False
-    )
 
-def get_embeddings(model, faces, target_size):
+def detect_faces(image_path: str, detector_backend: str = "retinaface", min_confidence: float = 0.5):
+    """
+    Detect faces in an image using the specified detector backend.
+
+    Parameters:
+        image_path (str): Path to the image file.
+        detector_backend (str): The face detector backend to use (default: "retinaface").
+        min_confidence (float): Minimum confidence threshold for detected faces (default: 0.5).
+
+    Returns:
+        list: A list of detected face dictionaries with confidence above the threshold.
+    """
+    try:
+        faces = DeepFace.extract_faces(
+            img_path=image_path,
+            detector_backend=detector_backend,
+            enforce_detection=False
+        )
+        print(f"Detected {len(faces)} face(s) using '{detector_backend}' detector.")
+        filtered_faces = [
+            face for face in faces
+            if face.get("confidence", 1.0) >= min_confidence
+        ]
+        if not faces:
+            print("No faces detected.")
+        elif len(faces) > len(filtered_faces):
+            print(f"Filtered out {len(faces) - len(filtered_faces)} face(s) below confidence threshold of {min_confidence}.")
+        return filtered_faces
+    except Exception as e:
+        print(f"Error during face detection: {e}")
+        return []
+
+
+def get_embeddings(model, faces: list, target_size):
+    """
+    Extract embeddings for a list of detected faces using the specified model and target size.
+
+    Parameters:
+        model: The face recognition model to use for embedding extraction.
+        faces (list): A list of detected face dictionaries, each containing a "face" key with the face image.
+        target_size: The target size for face images when extracting embeddings.
+
+    Returns:
+        np.ndarray: A 2D array of shape (num_faces, embedding_dim) containing the normalized embeddings for each
+        detected face. If no faces are provided, returns an empty array with shape (0, embedding_dim).
+    """
     if not faces:
         return np.empty((0, model.output_shape[-1]), dtype=np.float32)
 
@@ -60,7 +110,22 @@ def get_embeddings(model, faces, target_size):
     return reps
 
 
-def one_to_one_matching(faces1, faces2, model, target_size, metric, threshold):
+def one_to_one_matching(faces1: list, faces2: list, model, target_size, metric: str, threshold: float):
+    """
+    Perform one-to-one matching of faces between two lists based on the specified distance metric and threshold.
+    
+    Parameters:
+        faces1 (list): List of detected faces from the first image.
+        faces2 (list): List of detected faces from the second image.
+        model: The face recognition model to use for embedding extraction.
+        target_size: The target size for face images when extracting embeddings.
+        metric (str): The distance metric to use for comparison ("cosine", "euclidean", or "euclidean_l2").
+        threshold (float): The distance threshold for considering a match.
+    Returns:
+        list: A list of tuples (i, j, distance) where i is the index of the face in faces1, j is the index of
+        the face in faces2, and distance is the computed distance between their embeddings. Only matches with
+        distance below the threshold are included.
+    """
     if not faces1 or not faces2:
         print("No faces detected in one or both images.")
         return []
@@ -92,9 +157,30 @@ def one_to_one_matching(faces1, faces2, model, target_size, metric, threshold):
     return matches
 
 
-def draw_id_with_background(draw, x, y, w, h, text, font, text_color="black",
-                            bg_color="white", border=FACE_BORDER, padding=2, vmargin=2,
-                            image_height=None):
+def draw_id_with_background(draw, x: int, y: int, w: int, h: int, text: str, font, text_color: str = "black",
+                            bg_color: str = "white", border: int = FACE_BORDER, padding: int = 2, vmargin: int = 2,
+                            image_height: int | None = None):
+    """
+    Draws a text label with a background rectangle above or below a detected face bounding box.
+
+    Parameters:
+        draw: An ImageDraw.Draw object to draw on.
+        x (int): The x-coordinate of the top-left corner of the face bounding box.
+        y (int): The y-coordinate of the top-left corner of the face bounding box.
+        w (int): The width of the face bounding box.
+        h (int): The height of the face bounding box.
+        text (str): The text label to draw (e.g., "ID 0").
+        font: The font to use for the text.
+        text_color (str): The color of the text (default: "black").
+        bg_color (str): The background color for the text rectangle (default: "white").
+        border (int): The width of the border around the face bounding box (default: FACE_BORDER).
+        padding (int): The padding around the text inside the background rectangle (default: 2).
+        vmargin (int): The vertical margin between the face bounding box and the text rectangle (default: 2).
+        image_height (int | None): The height of the image to ensure the text rectangle does not go out of bounds (default: None, no constraint).
+
+    Returns:
+        None. The function modifies the provided ImageDraw object in place to add the text label with background.
+    """
     bbox = draw.textbbox((0, 0), text, font=font)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
@@ -123,7 +209,21 @@ def draw_id_with_background(draw, x, y, w, h, text, font, text_color="black",
     draw.text((draw_x, draw_y), text, fill=text_color, font=font)
 
 
-def extract_and_compare_faces(image1_path, image2_path, model_name="ArcFace", detector="retinaface", threshold=None):
+def extract_and_compare_faces(image1_path: str, image2_path: str, model_name: str = "ArcFace", detector: str = "retinaface", threshold: float | None = None):
+    """
+    Detects faces in two images, extracts embeddings using a specified face recognition model,
+    compares the faces, and visualizes the results.
+
+    Parameters:
+        image1_path (str): Path to the first image file.
+        image2_path (str): Path to the second image file.
+        model_name (str): Name of the face recognition model to use (default: "ArcFace").
+        detector (str): Name of the face detector backend to use (default: "retinaface").
+        threshold (float, optional): Custom distance threshold for matching faces. If None, uses the model's default.
+
+    Returns:
+        None. Displays annotated images and prints matching results to the console.
+    """
     if not os.path.isfile(image1_path) or not os.path.isfile(image2_path):
         print("Error: both image files are required.")
         return
@@ -132,9 +232,19 @@ def extract_and_compare_faces(image1_path, image2_path, model_name="ArcFace", de
     img1 = Image.open(image1_path).convert("RGB")
     img2 = Image.open(image2_path).convert("RGB")
 
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp1:
+        img1.save(tmp1.name)
+        tmp1_path = tmp1.name
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp2:
+        img2.save(tmp2.name)
+        tmp2_path = tmp2.name
+
     print(f"Detecting faces using '{detector}' detector...")
-    faces1 = detect_faces(np.array(img1), detector)
-    faces2 = detect_faces(np.array(img2), detector)
+    faces1 = detect_faces(tmp1_path, detector)
+    faces2 = detect_faces(tmp2_path, detector)
+    
+    os.unlink(tmp1_path)
+    os.unlink(tmp2_path)
 
     print(f"Recognizing faces using '{model_name}' model...")
     model: FacialRecognition = DeepFace.build_model(task="facial_recognition", model_name=model_name)
@@ -205,5 +315,4 @@ if __name__ == "__main__":
     parser.add_argument("--threshold", type=float, default=None, help="Custom threshold. If not set it is used default for model.")
     args = parser.parse_args()
 
-    extract_and_compare_faces(args.image1, args.image2, model_name=args.model, detector=args.detector,
-        threshold=args.threshold)
+    extract_and_compare_faces(args.image1, args.image2, model_name=args.model, detector=args.detector, threshold=args.threshold)

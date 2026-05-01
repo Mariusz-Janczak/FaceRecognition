@@ -6,3 +6,11 @@ insightface
 onnxruntime
 typing-extensions
 dlib
+numpy
+opencv-python
+scikit-learn
+scikit-image
+matplotlib
+pandas
+seaborn
+joblib
