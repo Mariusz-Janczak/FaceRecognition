@@ -12,6 +12,7 @@ from deepface.models.FacialRecognition import FacialRecognition
 from scipy.spatial.distance import cdist
 from scipy.optimize import linear_sum_assignment
 from PIL import Image, ImageDraw, ImageFont
+from .helpers import log_output, log_error, log_warning, log_info
 
 FACE_BORDER = 1
 TEXT_SIZE = 14
@@ -42,14 +43,14 @@ def resize_with_aspect_ratio(image, max_size: int = 1024):
     ), scale
 
 
-def detect_faces(image_path: str, detector_backend: str = "retinaface", min_confidence: float = 0.5):
+def detect_faces(image_path: str, detector_backend: str = "retinaface", min_confidence: float = 0.8):
     """
     Detect faces in an image using the specified detector backend.
 
     Parameters:
         image_path (str): Path to the image file.
         detector_backend (str): The face detector backend to use (default: "retinaface").
-        min_confidence (float): Minimum confidence threshold for detected faces (default: 0.5).
+        min_confidence (float): Minimum confidence threshold for detected faces (default: 0.8).
 
     Returns:
         list: A list of detected face dictionaries with confidence above the threshold.
@@ -60,18 +61,18 @@ def detect_faces(image_path: str, detector_backend: str = "retinaface", min_conf
             detector_backend=detector_backend,
             enforce_detection=False
         )
-        print(f"Detected {len(faces)} face(s) using '{detector_backend}' detector.")
+        log_info(f"Detected {len(faces)} face(s) using '{detector_backend}' detector.")
         filtered_faces = [
             face for face in faces
             if face.get("confidence", 1.0) >= min_confidence
         ]
         if not faces:
-            print("No faces detected.")
+            log_info("No faces detected.")
         elif len(faces) > len(filtered_faces):
-            print(f"Filtered out {len(faces) - len(filtered_faces)} face(s) below confidence threshold of {min_confidence}.")
+            log_warning(f"Filtered out {len(faces) - len(filtered_faces)} face(s) below confidence threshold of {min_confidence}.")
         return filtered_faces
     except Exception as e:
-        print(f"Error during face detection: {e}")
+        log_error(f"Error during face detection: {e}")
         return []
 
 
@@ -127,18 +128,18 @@ def one_to_one_matching(faces1: list, faces2: list, model, target_size, metric: 
         distance below the threshold are included.
     """
     if not faces1 or not faces2:
-        print("No faces detected in one or both images.")
+        log_info("No faces detected in one or both images.")
         return []
 
-    print("Build embeddings...")
+    log_info("Building embeddings...")
     embeddings1 = get_embeddings(model, faces1, target_size)
     embeddings2 = get_embeddings(model, faces2, target_size)
 
     if embeddings1.size == 0 or embeddings2.size == 0:
-        print("No embeddings were produced.")
+        log_info("No embeddings were produced.")
         return []
 
-    print("Performing faces comparison...")
+    log_info("Performing faces comparison...")
     if metric == "cosine":
         distance_matrix = 1.0 - np.dot(embeddings1, embeddings2.T)
         distance_matrix = np.clip(distance_matrix, 0.0, 2.0)
@@ -225,10 +226,10 @@ def extract_and_compare_faces(image1_path: str, image2_path: str, model_name: st
         None. Displays annotated images and prints matching results to the console.
     """
     if not os.path.isfile(image1_path) or not os.path.isfile(image2_path):
-        print("Error: both image files are required.")
+        log_error("Error: both image files are required.")
         return
 
-    print("Loading images...")
+    log_info("Loading images...")
     img1 = Image.open(image1_path).convert("RGB")
     img2 = Image.open(image2_path).convert("RGB")
 
@@ -239,17 +240,17 @@ def extract_and_compare_faces(image1_path: str, image2_path: str, model_name: st
         img2.save(tmp2.name)
         tmp2_path = tmp2.name
 
-    print(f"Detecting faces using '{detector}' detector...")
+    log_info(f"Detecting faces using '{detector}' detector...")
     faces1 = detect_faces(tmp1_path, detector)
     faces2 = detect_faces(tmp2_path, detector)
     
     os.unlink(tmp1_path)
     os.unlink(tmp2_path)
 
-    print(f"Recognizing faces using '{model_name}' model...")
+    log_info(f"Recognizing faces using '{model_name}' model...")
     model: FacialRecognition = DeepFace.build_model(task="facial_recognition", model_name=model_name)
     target_size = model.input_shape
-    print(f"Faces target size: {target_size}")
+    log_info(f"Faces target size: {target_size}")
 
     if model_name in ["ArcFace", "SFace", "Buffalo_L"]:
         metric = "cosine"
@@ -262,9 +263,9 @@ def extract_and_compare_faces(image1_path: str, image2_path: str, model_name: st
     if threshold is None:
         threshold = default_threshold
 
-    print(f"Model metric: {metric}, Threshold: {threshold:.3f}")
+    log_info(f"Model metric: {metric}, Threshold: {threshold:.3f} (default: {default_threshold:.3f})")
 
-    matches_found = one_to_one_matching(faces1, faces2, model, target_size, metric, threshold)
+    matches_found = one_to_one_matching(faces1, faces2, model, target_size, metric, default_threshold)
 
     img1_scaled, scale1 = resize_with_aspect_ratio(img1)
     img2_scaled, scale2 = resize_with_aspect_ratio(img2)
@@ -297,13 +298,13 @@ def extract_and_compare_faces(image1_path: str, image2_path: str, model_name: st
     img2_scaled.show(title=image2_path)
 
     if matches_found:
-        print(f"Found {len(matches_found)} match(es):")
+        log_info(f"Found {len(matches_found)} match(es):")
         reset = "\033[0m"
         for i, j, distance in matches_found:
             color = "\033[92m" if distance < min(threshold, default_threshold) else "\033[93m"
-            print(f"{color}Face ID {i} of {image1_path} matches face ID {j} of {image2_path} (distance: {distance:.3f}){reset}")
+            log_output(f"{color}Face ID {i} of {image1_path} matches face ID {j} of {image2_path} (distance: {distance:.3f}){reset}")
     else:
-        print("No matching faces found.")
+        log_info("No matching faces found.")
 
 
 if __name__ == "__main__":
