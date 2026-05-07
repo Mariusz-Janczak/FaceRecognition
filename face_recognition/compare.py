@@ -262,10 +262,12 @@ def extract_and_compare_faces(image1_path: str, image2_path: str, model_name: st
     default_threshold = verification.find_threshold(model_name=model_name, distance_metric=metric)
     if threshold is None:
         threshold = default_threshold
+    
+    threshold_min = min(threshold, default_threshold)
 
     log_info(f"Model metric: {metric}, Threshold: {threshold:.3f} (default: {default_threshold:.3f})")
 
-    matches_found = one_to_one_matching(faces1, faces2, model, target_size, metric, default_threshold)
+    matches_found = one_to_one_matching(faces1, faces2, model, target_size, metric, threshold)
 
     img1_scaled, scale1 = resize_with_aspect_ratio(img1)
     img2_scaled, scale2 = resize_with_aspect_ratio(img2)
@@ -282,7 +284,7 @@ def extract_and_compare_faces(image1_path: str, image2_path: str, model_name: st
         draw2.rectangle([x, y, x + w, y + h], outline="red", width=FACE_BORDER)
 
     for i, j, distance in matches_found:
-        color = "green" if distance < min(threshold, default_threshold) else "yellow"
+        color = "green" if distance < threshold_min else "yellow"
         x1, y1, w1, h1 = [int(faces1[i]["facial_area"][k] * scale1) for k in ("x", "y", "w", "h")]
         draw1.rectangle([x1, y1, x1 + w1, y1 + h1], outline=color, width=FACE_BORDER)
         text = f"ID {i}"
@@ -301,7 +303,7 @@ def extract_and_compare_faces(image1_path: str, image2_path: str, model_name: st
         log_info(f"Found {len(matches_found)} match(es):")
         reset = "\033[0m"
         for i, j, distance in matches_found:
-            color = "\033[92m" if distance < min(threshold, default_threshold) else "\033[93m"
+            color = "\033[92m" if distance < threshold_min else "\033[93m"
             log_output(f"{color}Face ID {i} of {image1_path} matches face ID {j} of {image2_path} (distance: {distance:.3f}){reset}")
     else:
         log_info("No matching faces found.")

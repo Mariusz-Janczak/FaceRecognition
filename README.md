@@ -5,11 +5,21 @@ It supports various models (ArcFace, VGG-Face, Facenet) and various face detecto
 
 ## Installation
 
+### Quick Setup (Recommended)
+
+```bash
+git clone https://github.com/Mariusz-Janczak/FaceRecognition.git
+cd FaceRecognition
+bash envsetup.sh
+```
+
+### Manual Setup
+
 ```bash
 git clone https://github.com/Mariusz-Janczak/FaceRecognition.git
 cd FaceRecognition
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
